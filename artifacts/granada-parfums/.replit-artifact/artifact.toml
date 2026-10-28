@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "Granada Parfums"
+description = "A premium, mobile-first Algerian fragrance storefront for Granada Parfums and its L'Essence d'Andalousie collection. Explore the scent story, compare bottle sizes, and save a validated pre-booking locally."
+version = "1.0.0"
+id = "artifacts/granada-parfums"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 19974
+
+[services.development]
+run = "pnpm --filter @workspace/granada-parfums run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/granada-parfums", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/granada-parfums/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "19974"
+BASE_PATH = "/"
