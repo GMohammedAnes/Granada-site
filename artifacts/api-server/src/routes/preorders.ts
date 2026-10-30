@@ -1,10 +1,11 @@
 import { randomUUID } from "node:crypto";
-import { desc, eq } from "drizzle-orm";
+import { desc, eq, sql } from "drizzle-orm";
 import { Router, type IRouter } from "express";
 import { rateLimit } from "express-rate-limit";
 import {
   CreatePreorderBody,
   CreatePreorderResponse,
+  GetCampaignStatusResponse,
   ListStaffPreordersResponse,
   TrackPreordersQueryParams,
   TrackPreordersResponse,
@@ -12,7 +13,12 @@ import {
   UpdatePreorderStatusParams,
   UpdatePreorderStatusResponse,
 } from "@workspace/api-zod";
-import { db, granadaPreordersTable } from "@workspace/db";
+import {
+  db,
+  granadaCampaignTable,
+  granadaPreordersTable,
+  type GranadaCampaign,
+} from "@workspace/db";
 import { requireGranadaStaff } from "../middlewares/requireGranadaStaff";
 
 const router: IRouter = Router();
@@ -31,6 +37,55 @@ const trackingLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+const CAMPAIGN_ID = 1;
+const CAMPAIGN_TOTAL_UNITS = 100;
+const CAMPAIGN_INITIAL_RESERVED = 86;
+const CAMPAIGN_DURATION_MS = 24 * 60 * 60 * 1000;
+
+async function ensureCampaign() {
+  const startedAt = new Date();
+  await db
+    .insert(granadaCampaignTable)
+    .values({
+      id: CAMPAIGN_ID,
+      totalUnits: CAMPAIGN_TOTAL_UNITS,
+      initialReserved: CAMPAIGN_INITIAL_RESERVED,
+      newReservations: 0,
+      startedAt,
+      endsAt: new Date(startedAt.getTime() + CAMPAIGN_DURATION_MS),
+    })
+    .onConflictDoNothing();
+
+  const [campaign] = await db
+    .select()
+    .from(granadaCampaignTable)
+    .where(eq(granadaCampaignTable.id, CAMPAIGN_ID))
+    .limit(1);
+  if (!campaign) throw new Error("Granada launch campaign is unavailable.");
+  return campaign;
+}
+
+function toCampaignResponse(campaign: GranadaCampaign) {
+  const reserved = campaign.initialReserved + campaign.newReservations;
+  return GetCampaignStatusResponse.parse({
+    totalUnits: campaign.totalUnits,
+    reserved,
+    remaining: Math.max(0, campaign.totalUnits - reserved),
+    progressPercent: Math.min(
+      100,
+      Math.round((reserved / campaign.totalUnits) * 100),
+    ),
+    startedAt: campaign.startedAt.toISOString(),
+    endsAt: campaign.endsAt.toISOString(),
+    serverTime: new Date().toISOString(),
+  });
+}
+
+router.get("/orders/campaign", async (_req, res): Promise<void> => {
+  const campaign = await ensureCampaign();
+  res.json(toCampaignResponse(campaign));
+});
+
 router.post("/orders", preorderLimiter, async (req, res): Promise<void> => {
   const parsed = CreatePreorderBody.safeParse(req.body);
   if (!parsed.success) {
@@ -39,14 +94,53 @@ router.post("/orders", preorderLimiter, async (req, res): Promise<void> => {
   }
 
   const orderId = `GP-${randomUUID().replaceAll("-", "").toUpperCase()}`;
-  const [preorder] = await db
-    .insert(granadaPreordersTable)
-    .values({
-      ...parsed.data,
-      orderId,
-      status: "pending",
-    })
-    .returning();
+  const preorder = await db.transaction(async (tx) => {
+    const startedAt = new Date();
+    await tx
+      .insert(granadaCampaignTable)
+      .values({
+        id: CAMPAIGN_ID,
+        totalUnits: CAMPAIGN_TOTAL_UNITS,
+        initialReserved: CAMPAIGN_INITIAL_RESERVED,
+        newReservations: 0,
+        startedAt,
+        endsAt: new Date(startedAt.getTime() + CAMPAIGN_DURATION_MS),
+      })
+      .onConflictDoNothing();
+
+    const [campaign] = await tx
+      .select()
+      .from(granadaCampaignTable)
+      .where(eq(granadaCampaignTable.id, CAMPAIGN_ID))
+      .for("update")
+      .limit(1);
+    if (!campaign) throw new Error("Granada launch campaign is unavailable.");
+
+    const remaining =
+      campaign.totalUnits - campaign.initialReserved - campaign.newReservations;
+    if (remaining <= 0) return null;
+
+    const [created] = await tx
+      .insert(granadaPreordersTable)
+      .values({
+        ...parsed.data,
+        orderId,
+        status: "pending",
+      })
+      .returning();
+
+    await tx
+      .update(granadaCampaignTable)
+      .set({ newReservations: sql`${granadaCampaignTable.newReservations} + 1` })
+      .where(eq(granadaCampaignTable.id, CAMPAIGN_ID));
+
+    return created;
+  });
+
+  if (!preorder) {
+    res.status(409).json({ error: "The first launch batch is fully reserved." });
+    return;
+  }
 
   res.status(201).json(
     CreatePreorderResponse.parse({

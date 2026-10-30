@@ -26,6 +26,23 @@ export const PreorderVariant = {
   ivory: 'ivory',
 } as const;
 
+export interface CampaignStatus {
+  /** @minimum 1 */
+  totalUnits: number;
+  /** @minimum 0 */
+  reserved: number;
+  /** @minimum 0 */
+  remaining: number;
+  /**
+     * @minimum 0
+     * @maximum 100
+     */
+  progressPercent: number;
+  startedAt: string;
+  endsAt: string;
+  serverTime: string;
+}
+
 export interface PreorderInput {
   /**
      * @minLength 1

@@ -1,0 +1,1 @@
+- [Granada launch campaign](granada-campaign.md) — Shared 24-hour timer starts at first public access; the first batch begins 86/100 and stops at 100.

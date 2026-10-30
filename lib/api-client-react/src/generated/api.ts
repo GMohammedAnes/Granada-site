@@ -20,6 +20,7 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  CampaignStatus,
   HealthStatus,
   PreorderCreated,
   PreorderInput,
@@ -221,6 +222,84 @@ export const useCreatePreorder = <TError = ErrorType<void>,
       > => {
       return useMutation(getCreatePreorderMutationOptions(options));
     }
+
+export const getGetCampaignStatusUrl = () => {
+
+
+
+
+  return `/api/orders/campaign`
+}
+
+/**
+ * Returns the shared 24-hour countdown and first-batch availability.
+ * @summary Get the shared launch campaign status
+ */
+export const getCampaignStatus = async ( options?: Parameters<typeof customFetch>[1]): Promise<CampaignStatus> => {
+
+  return customFetch<CampaignStatus>(getGetCampaignStatusUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetCampaignStatusQueryKey = () => {
+    return [
+    `/api/orders/campaign`
+    ] as const;
+    }
+
+
+export const getGetCampaignStatusQueryOptions = <TData = Awaited<ReturnType<typeof getCampaignStatus>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCampaignStatus>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetCampaignStatusQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getCampaignStatus>>> = ({ signal }) => getCampaignStatus({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getCampaignStatus>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetCampaignStatusQueryResult = NonNullable<Awaited<ReturnType<typeof getCampaignStatus>>>
+export type GetCampaignStatusQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get the shared launch campaign status
+ */
+
+export function useGetCampaignStatus<TData = Awaited<ReturnType<typeof getCampaignStatus>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCampaignStatus>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetCampaignStatusQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getTrackPreordersUrl = (params?: TrackPreordersParams,) => {
   const normalizedParams = new URLSearchParams();

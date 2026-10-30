@@ -48,6 +48,21 @@ paths:
                 $ref: "#/components/schemas/PreorderCreated"
         "400":
           description: Invalid pre-order details
+        "409":
+          description: The first launch batch is fully reserved
+  /orders/campaign:
+    get:
+      operationId: getCampaignStatus
+      tags: [orders]
+      summary: Get the shared launch campaign status
+      description: Returns the shared 24-hour countdown and first-batch availability.
+      responses:
+        "200":
+          description: Current campaign availability
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CampaignStatus"
   /orders/track:
     get:
       operationId: trackPreorders
@@ -146,6 +161,32 @@ components:
     PreorderVariant:
       type: string
       enum: [royal, ivory]
+    CampaignStatus:
+      type: object
+      required: [totalUnits, reserved, remaining, progressPercent, startedAt, endsAt, serverTime]
+      properties:
+        totalUnits:
+          type: integer
+          minimum: 1
+        reserved:
+          type: integer
+          minimum: 0
+        remaining:
+          type: integer
+          minimum: 0
+        progressPercent:
+          type: integer
+          minimum: 0
+          maximum: 100
+        startedAt:
+          type: string
+          format: date-time
+        endsAt:
+          type: string
+          format: date-time
+        serverTime:
+          type: string
+          format: date-time
     PreorderInput:
       type: object
       required: [name, phone, variant, wilaya]

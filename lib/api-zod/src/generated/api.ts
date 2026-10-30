@@ -43,6 +43,31 @@ export const CreatePreorderResponse = zod.object({
 
 
 /**
+ * Returns the shared 24-hour countdown and first-batch availability.
+ * @summary Get the shared launch campaign status
+ */
+
+export const getCampaignStatusResponseReservedMin = 0;
+
+export const getCampaignStatusResponseRemainingMin = 0;
+
+export const getCampaignStatusResponseProgressPercentMin = 0;
+export const getCampaignStatusResponseProgressPercentMax = 100;
+
+
+
+export const GetCampaignStatusResponse = zod.object({
+  "totalUnits": zod.number().int().min(1),
+  "reserved": zod.number().int().min(getCampaignStatusResponseReservedMin),
+  "remaining": zod.number().int().min(getCampaignStatusResponseRemainingMin),
+  "progressPercent": zod.number().int().min(getCampaignStatusResponseProgressPercentMin).max(getCampaignStatusResponseProgressPercentMax),
+  "startedAt": zod.coerce.date(),
+  "endsAt": zod.coerce.date(),
+  "serverTime": zod.coerce.date()
+})
+
+
+/**
  * Provide either an order ID or a validated Algerian phone number. Only order IDs and statuses are returned.
  * @summary Look up pre-order statuses
  */

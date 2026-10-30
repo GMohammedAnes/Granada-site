@@ -1,6 +1,10 @@
 import { useState, type FormEvent } from 'react';
 import { ArrowDown, ArrowRight, Check, Menu, X } from 'lucide-react';
-import { useCreatePreorder } from '@workspace/api-client-react';
+import {
+  getGetCampaignStatusQueryKey,
+  useCreatePreorder,
+  useGetCampaignStatus,
+} from '@workspace/api-client-react';
 import type { PreorderCreated, PreorderInput } from '@workspace/api-client-react';
 import { Link, Route, Switch, Router as WouterRouter, useLocation } from 'wouter';
 import { ClerkProvider, SignIn, SignUp } from '@clerk/react';
@@ -11,6 +15,7 @@ import TrackPage from './pages/TrackPage';
 import StaffPage from './pages/StaffPage';
 import { queryClient } from './lib/queryClient';
 import { apiErrorMessage } from './lib/order-status';
+import { CampaignBanner, CampaignUrgencyPanel } from './components/CampaignScarcity';
 
 const wilayas = [
   ['01', 'Adrar', 'أدرار'], ['02', 'Chlef', 'الشلف'], ['03', 'Laghouat', 'الأغواط'],
@@ -48,6 +53,15 @@ function Storefront() {
   const [createdOrder, setCreatedOrder] = useState<PreorderCreated | null>(null);
   const [submitError, setSubmitError] = useState('');
   const createPreorder = useCreatePreorder();
+  const campaignQuery = useGetCampaignStatus({
+    query: {
+      queryKey: getGetCampaignStatusQueryKey(),
+      refetchInterval: 15_000,
+      staleTime: 0,
+    },
+  });
+  const campaign = campaignQuery.data;
+  const batchIsFull = campaign?.remaining === 0;
   const phoneError = phone.length > 0 && !phonePattern.test(phone)
     ? 'أدخل رقم هاتف من 10 أرقام يبدأ بـ 05 أو 06 أو 07.'
     : '';
@@ -70,21 +84,36 @@ function Storefront() {
       onSuccess: (order) => {
         setCreatedOrder(order);
         setSubmitError('');
+        void queryClient.invalidateQueries({
+          queryKey: getGetCampaignStatusQueryKey(),
+        });
         setName('');
         setPhone('');
         setWilaya('');
       },
-      onError: (error) => setSubmitError(apiErrorMessage(error)),
+      onError: (error) => {
+        if (error.status === 409) {
+          setSubmitError('اكتملت الدفعة الأولى. لا يمكن تسجيل طلب جديد.');
+          void campaignQuery.refetch();
+          return;
+        }
+        setSubmitError(apiErrorMessage(error));
+      },
     });
   }
 
   const closeMenu = () => setMobileMenu(false);
   return (
-    <main className="min-h-[100dvh] overflow-hidden">
+    <main className="min-h-[100dvh] overflow-x-clip">
       <div className="bg-[#211219] px-4 py-2 text-center text-[10px] tracking-[.18em] text-[#ddc795] sm:text-xs" data-testid="text-delivery-announcement">
         LIVRAISON DANS LES 58 WILAYAS · التوصيل إلى جميع ولايات الوطن
       </div>
-      <header className="site-header sticky top-0 z-40 border-b border-white/10 text-[#f5f0e7]">
+      <CampaignBanner
+        campaign={campaign}
+        isLoading={campaignQuery.isLoading}
+        isError={campaignQuery.isError}
+      />
+      <header className="site-header sticky top-11 z-40 border-b border-white/10 text-[#f5f0e7] sm:top-10">
         <div className="mx-auto flex h-[72px] max-w-[1320px] items-center justify-between px-5 md:px-10">
           <a href="#home" onClick={closeMenu} className="group flex items-center gap-3" data-testid="link-brand-home">
             <span className="grid h-10 w-10 place-items-center border border-[#c6a56a]/65 text-[#c6a56a] transition-transform group-hover:rotate-45"><span className="star-mark">✧</span></span>
@@ -207,6 +236,12 @@ function Storefront() {
             <h2 className="serif mt-5 text-[42px] leading-[1.08] text-[#301923] sm:text-[56px]">Réservez votre<br /><span className="text-[#765143]">signature.</span></h2>
              <p className="mt-6 max-w-[390px] text-sm leading-7 text-[#6e6258]">Laissez-nous vos coordonnées pour précommander L’Essence d’Andalousie. Votre demande est transmise à la maison Granada pour suivi.</p>
             <div className="mt-9 border-l border-[#a98c5b] pl-5"><p className="serif text-xl text-[#4b1827]">Un sillage. Une histoire.</p><p dir="rtl" className="mt-2 text-sm text-[#7e6a5d]">عطر الأندلس - عبق يروي حكاية الأصالة</p></div>
+             <CampaignUrgencyPanel
+               campaign={campaign}
+               isLoading={campaignQuery.isLoading}
+               isError={campaignQuery.isError}
+               onRetry={() => void campaignQuery.refetch()}
+             />
           </div>
           <form onSubmit={handleSubmit} className="border border-[#ded3c4] bg-[#faf7f1] p-5 sm:p-9" noValidate data-testid="form-prebooking">
             <div className="mb-7 flex items-center justify-between border-b border-[#e4dbce] pb-5"><div><p className="section-kicker !text-[#8b7251]">PRÉCOMMANDE</p><h3 className="serif mt-1 text-2xl text-[#301923]">Vos coordonnées</h3></div><span className="text-[10px] tracking-[.15em] text-[#968779]">ALGÉRIE</span></div>
@@ -224,7 +259,7 @@ function Storefront() {
               {createPreorder.isPending && <div className="animate-pulse border border-[#ded3c4] bg-[#f1ecde] px-4 py-4 text-sm text-[#604b35]" role="status" data-testid="status-booking-loading">Enregistrement de votre précommande…</div>}
               {createdOrder && <div role="status" className="border border-[#9e895b]/45 bg-[#f1ecde] px-4 py-4 text-sm leading-6 text-[#3e4b32]" data-testid="status-booking-success"><strong className="block">تم استلام طلبك بنجاح.</strong><span>Votre précommande est confirmée par la maison Granada.</span><span className="mt-3 block text-[10px] tracking-[.14em] text-[#765143]">IDENTIFIANT DE COMMANDE</span><code className="font-mono text-sm text-[#4b1827]" data-testid="text-created-order-id">{createdOrder.orderId}</code><Link href={`/track?orderId=${encodeURIComponent(createdOrder.orderId)}`} className="mt-3 flex items-center gap-2 text-[10px] font-semibold tracking-[.12em] text-[#4b1827] underline underline-offset-4" data-testid="link-track-created-order">SUIVRE CETTE COMMANDE <ArrowRight size={13} /></Link></div>}
             </div>
-            <button type="submit" disabled={createPreorder.isPending} className="mt-5 flex min-h-[54px] w-full items-center justify-center gap-3 bg-[#4b1827] px-5 text-[11px] font-semibold tracking-[.14em] text-[#f4e9d6] transition-colors hover:bg-[#64253a] focus:outline-none focus:ring-2 focus:ring-[#c6a56a] focus:ring-offset-2 disabled:cursor-wait disabled:opacity-60" data-testid="button-submit-prebooking">{createPreorder.isPending ? 'ENREGISTREMENT…' : 'CONFIRMER MA PRÉCOMMANDE'} <ArrowRight size={15} /></button>
+             <button type="submit" disabled={createPreorder.isPending || batchIsFull} className="mt-5 flex min-h-[54px] w-full items-center justify-center gap-3 bg-[#4b1827] px-5 text-[11px] font-semibold tracking-[.14em] text-[#f4e9d6] transition-colors hover:bg-[#64253a] focus:outline-none focus:ring-2 focus:ring-[#c6a56a] focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60" data-testid="button-submit-prebooking">{createPreorder.isPending ? 'ENREGISTREMENT…' : batchIsFull ? 'اكتملت الدفعة الأولى' : 'CONFIRMER MA PRÉCOMMANDE'} {!batchIsFull && <ArrowRight size={15} />}</button>
             <p className="mt-4 text-center text-[10px] leading-5 text-[#92867a]">Aucun paiement en ligne au moment de la précommande. Votre identifiant permet de suivre son statut.</p>
           </form>
         </div>
