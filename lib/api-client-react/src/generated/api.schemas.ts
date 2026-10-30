@@ -24,6 +24,7 @@ export type PreorderVariant = typeof PreorderVariant[keyof typeof PreorderVarian
 export const PreorderVariant = {
   royal: 'royal',
   ivory: 'ivory',
+  bundle: 'bundle',
 } as const;
 
 export interface CampaignStatus {
@@ -51,7 +52,16 @@ export interface PreorderInput {
   name: string;
   /** @pattern ^0[567][0-9]{8}$ */
   phone: string;
-  variant: PreorderVariant;
+  /**
+     * @minimum 0
+     * @maximum 100
+     */
+  royaleQuantity: number;
+  /**
+     * @minimum 0
+     * @maximum 100
+     */
+  blancheQuantity: number;
   /** @pattern ^(0[1-9]|[1-4][0-9]|5[0-8])$ */
   wilaya: string;
 }
@@ -59,6 +69,16 @@ export interface PreorderInput {
 export interface PreorderCreated {
   orderId: string;
   variant: PreorderVariant;
+  /** @minimum 0 */
+  royaleQuantity: number;
+  /** @minimum 0 */
+  blancheQuantity: number;
+  /** @minimum 0 */
+  subtotalDzd: number;
+  /** @minimum 0 */
+  discountDzd: number;
+  /** @minimum 0 */
+  totalDzd: number;
   wilaya: string;
   status: PreorderStatus;
   createdAt: string;
@@ -75,6 +95,16 @@ export interface StaffOrder {
   name: string;
   phone: string;
   variant: PreorderVariant;
+  /** @minimum 0 */
+  royaleQuantity: number;
+  /** @minimum 0 */
+  blancheQuantity: number;
+  /** @minimum 0 */
+  subtotalDzd: number;
+  /** @minimum 0 */
+  discountDzd: number;
+  /** @minimum 0 */
+  totalDzd: number;
   wilaya: string;
   status: PreorderStatus;
   createdAt: string;

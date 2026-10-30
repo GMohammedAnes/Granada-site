@@ -13,6 +13,16 @@ export interface StaffOrder {
   name: string;
   phone: string;
   variant: PreorderVariant;
+  /** @minimum 0 */
+  royaleQuantity: number;
+  /** @minimum 0 */
+  blancheQuantity: number;
+  /** @minimum 0 */
+  subtotalDzd: number;
+  /** @minimum 0 */
+  discountDzd: number;
+  /** @minimum 0 */
+  totalDzd: number;
   wilaya: string;
   status: PreorderStatus;
   createdAt: Date;

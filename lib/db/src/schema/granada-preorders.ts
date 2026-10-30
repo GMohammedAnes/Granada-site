@@ -1,8 +1,8 @@
 import { createInsertSchema } from "drizzle-zod";
-import { index, pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import { index, integer, pgTable, text, timestamp } from "drizzle-orm/pg-core";
 import { z } from "zod/v4";
 
-export type GranadaPreorderVariant = "royal" | "ivory";
+export type GranadaPreorderVariant = "royal" | "ivory" | "bundle";
 export type GranadaPreorderStatus = "pending" | "out_for_delivery" | "delivered";
 
 export const granadaPreordersTable = pgTable(
@@ -12,6 +12,11 @@ export const granadaPreordersTable = pgTable(
     name: text("name").notNull(),
     phone: text("phone").notNull(),
     variant: text("variant").notNull().$type<GranadaPreorderVariant>(),
+    royaleQuantity: integer("royale_quantity").notNull().default(0),
+    blancheQuantity: integer("blanche_quantity").notNull().default(0),
+    subtotalDzd: integer("subtotal_dzd").notNull().default(0),
+    discountDzd: integer("discount_dzd").notNull().default(0),
+    totalDzd: integer("total_dzd").notNull().default(0),
     wilaya: text("wilaya").notNull(),
     status: text("status")
       .notNull()

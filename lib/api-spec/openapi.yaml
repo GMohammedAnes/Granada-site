@@ -49,7 +49,7 @@ paths:
         "400":
           description: Invalid pre-order details
         "409":
-          description: The first launch batch is fully reserved
+          description: The first launch batch does not have enough remaining units
   /orders/campaign:
     get:
       operationId: getCampaignStatus
@@ -160,7 +160,7 @@ components:
       enum: [pending, out_for_delivery, delivered]
     PreorderVariant:
       type: string
-      enum: [royal, ivory]
+      enum: [royal, ivory, bundle]
     CampaignStatus:
       type: object
       required: [totalUnits, reserved, remaining, progressPercent, startedAt, endsAt, serverTime]
@@ -189,7 +189,7 @@ components:
           format: date-time
     PreorderInput:
       type: object
-      required: [name, phone, variant, wilaya]
+      required: [name, phone, royaleQuantity, blancheQuantity, wilaya]
       properties:
         name:
           type: string
@@ -198,19 +198,40 @@ components:
         phone:
           type: string
           pattern: "^0[567][0-9]{8}$"
-        variant:
-          $ref: "#/components/schemas/PreorderVariant"
+        royaleQuantity:
+          type: integer
+          minimum: 0
+          maximum: 100
+        blancheQuantity:
+          type: integer
+          minimum: 0
+          maximum: 100
         wilaya:
           type: string
           pattern: "^(0[1-9]|[1-4][0-9]|5[0-8])$"
     PreorderCreated:
       type: object
-      required: [orderId, variant, wilaya, status, createdAt]
+      required: [orderId, variant, royaleQuantity, blancheQuantity, subtotalDzd, discountDzd, totalDzd, wilaya, status, createdAt]
       properties:
         orderId:
           type: string
         variant:
           $ref: "#/components/schemas/PreorderVariant"
+        royaleQuantity:
+          type: integer
+          minimum: 0
+        blancheQuantity:
+          type: integer
+          minimum: 0
+        subtotalDzd:
+          type: integer
+          minimum: 0
+        discountDzd:
+          type: integer
+          minimum: 0
+        totalDzd:
+          type: integer
+          minimum: 0
         wilaya:
           type: string
         status:
@@ -231,7 +252,7 @@ components:
           format: date-time
     StaffOrder:
       type: object
-      required: [orderId, name, phone, variant, wilaya, status, createdAt, updatedAt]
+      required: [orderId, name, phone, variant, royaleQuantity, blancheQuantity, subtotalDzd, discountDzd, totalDzd, wilaya, status, createdAt, updatedAt]
       properties:
         orderId:
           type: string
@@ -241,6 +262,21 @@ components:
           type: string
         variant:
           $ref: "#/components/schemas/PreorderVariant"
+        royaleQuantity:
+          type: integer
+          minimum: 0
+        blancheQuantity:
+          type: integer
+          minimum: 0
+        subtotalDzd:
+          type: integer
+          minimum: 0
+        discountDzd:
+          type: integer
+          minimum: 0
+        totalDzd:
+          type: integer
+          minimum: 0
         wilaya:
           type: string
         status:

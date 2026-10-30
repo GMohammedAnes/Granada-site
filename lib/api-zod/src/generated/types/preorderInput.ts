@@ -5,7 +5,6 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
-import type { PreorderVariant } from './preorderVariant';
 
 export interface PreorderInput {
   /**
@@ -15,7 +14,16 @@ export interface PreorderInput {
   name: string;
   /** @pattern ^0[567][0-9]{8}$ */
   phone: string;
-  variant: PreorderVariant;
+  /**
+     * @minimum 0
+     * @maximum 100
+     */
+  royaleQuantity: number;
+  /**
+     * @minimum 0
+     * @maximum 100
+     */
+  blancheQuantity: number;
   /** @pattern ^(0[1-9]|[1-4][0-9]|5[0-8])$ */
   wilaya: string;
 }

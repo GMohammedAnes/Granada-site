@@ -12,4 +12,5 @@ export type PreorderVariant = typeof PreorderVariant[keyof typeof PreorderVarian
 export const PreorderVariant = {
   royal: 'royal',
   ivory: 'ivory',
+  bundle: 'bundle',
 } as const;

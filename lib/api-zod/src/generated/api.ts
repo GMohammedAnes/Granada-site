@@ -23,19 +23,43 @@ export const HealthCheckResponse = zod.object({
 export const createPreorderBodyNameMax = 160;
 
 export const createPreorderBodyPhoneRegExp = new RegExp('^0[567][0-9]{8}$');
+export const createPreorderBodyRoyaleQuantityMin = 0;
+export const createPreorderBodyRoyaleQuantityMax = 100;
+
+export const createPreorderBodyBlancheQuantityMin = 0;
+export const createPreorderBodyBlancheQuantityMax = 100;
+
 export const createPreorderBodyWilayaRegExp = new RegExp('^(0[1-9]|[1-4][0-9]|5[0-8])$');
 
 
 export const CreatePreorderBody = zod.object({
   "name": zod.string().min(1).max(createPreorderBodyNameMax),
   "phone": zod.string().regex(createPreorderBodyPhoneRegExp),
-  "variant": zod.enum(['royal', 'ivory']),
+  "royaleQuantity": zod.number().int().min(createPreorderBodyRoyaleQuantityMin).max(createPreorderBodyRoyaleQuantityMax),
+  "blancheQuantity": zod.number().int().min(createPreorderBodyBlancheQuantityMin).max(createPreorderBodyBlancheQuantityMax),
   "wilaya": zod.string().regex(createPreorderBodyWilayaRegExp)
 })
 
+export const createPreorderResponseRoyaleQuantityMin = 0;
+
+export const createPreorderResponseBlancheQuantityMin = 0;
+
+export const createPreorderResponseSubtotalDzdMin = 0;
+
+export const createPreorderResponseDiscountDzdMin = 0;
+
+export const createPreorderResponseTotalDzdMin = 0;
+
+
+
 export const CreatePreorderResponse = zod.object({
   "orderId": zod.string(),
-  "variant": zod.enum(['royal', 'ivory']),
+  "variant": zod.enum(['royal', 'ivory', 'bundle']),
+  "royaleQuantity": zod.number().int().min(createPreorderResponseRoyaleQuantityMin),
+  "blancheQuantity": zod.number().int().min(createPreorderResponseBlancheQuantityMin),
+  "subtotalDzd": zod.number().int().min(createPreorderResponseSubtotalDzdMin),
+  "discountDzd": zod.number().int().min(createPreorderResponseDiscountDzdMin),
+  "totalDzd": zod.number().int().min(createPreorderResponseTotalDzdMin),
   "wilaya": zod.string(),
   "status": zod.enum(['pending', 'out_for_delivery', 'delivered']),
   "createdAt": zod.coerce.date()
@@ -93,11 +117,28 @@ export const TrackPreordersResponse = zod.array(TrackPreordersResponseItem)
 /**
  * @summary List pre-orders for authorized staff
  */
+export const listStaffPreordersResponseRoyaleQuantityMin = 0;
+
+export const listStaffPreordersResponseBlancheQuantityMin = 0;
+
+export const listStaffPreordersResponseSubtotalDzdMin = 0;
+
+export const listStaffPreordersResponseDiscountDzdMin = 0;
+
+export const listStaffPreordersResponseTotalDzdMin = 0;
+
+
+
 export const ListStaffPreordersResponseItem = zod.object({
   "orderId": zod.string(),
   "name": zod.string(),
   "phone": zod.string(),
-  "variant": zod.enum(['royal', 'ivory']),
+  "variant": zod.enum(['royal', 'ivory', 'bundle']),
+  "royaleQuantity": zod.number().int().min(listStaffPreordersResponseRoyaleQuantityMin),
+  "blancheQuantity": zod.number().int().min(listStaffPreordersResponseBlancheQuantityMin),
+  "subtotalDzd": zod.number().int().min(listStaffPreordersResponseSubtotalDzdMin),
+  "discountDzd": zod.number().int().min(listStaffPreordersResponseDiscountDzdMin),
+  "totalDzd": zod.number().int().min(listStaffPreordersResponseTotalDzdMin),
   "wilaya": zod.string(),
   "status": zod.enum(['pending', 'out_for_delivery', 'delivered']),
   "createdAt": zod.coerce.date(),
@@ -122,11 +163,28 @@ export const UpdatePreorderStatusBody = zod.object({
   "status": zod.enum(['pending', 'out_for_delivery', 'delivered'])
 })
 
+export const updatePreorderStatusResponseRoyaleQuantityMin = 0;
+
+export const updatePreorderStatusResponseBlancheQuantityMin = 0;
+
+export const updatePreorderStatusResponseSubtotalDzdMin = 0;
+
+export const updatePreorderStatusResponseDiscountDzdMin = 0;
+
+export const updatePreorderStatusResponseTotalDzdMin = 0;
+
+
+
 export const UpdatePreorderStatusResponse = zod.object({
   "orderId": zod.string(),
   "name": zod.string(),
   "phone": zod.string(),
-  "variant": zod.enum(['royal', 'ivory']),
+  "variant": zod.enum(['royal', 'ivory', 'bundle']),
+  "royaleQuantity": zod.number().int().min(updatePreorderStatusResponseRoyaleQuantityMin),
+  "blancheQuantity": zod.number().int().min(updatePreorderStatusResponseBlancheQuantityMin),
+  "subtotalDzd": zod.number().int().min(updatePreorderStatusResponseSubtotalDzdMin),
+  "discountDzd": zod.number().int().min(updatePreorderStatusResponseDiscountDzdMin),
+  "totalDzd": zod.number().int().min(updatePreorderStatusResponseTotalDzdMin),
   "wilaya": zod.string(),
   "status": zod.enum(['pending', 'out_for_delivery', 'delivered']),
   "createdAt": zod.coerce.date(),
