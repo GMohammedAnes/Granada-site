@@ -10,6 +10,10 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: orders
+    description: Customer pre-orders and status tracking
+  - name: staff
+    description: Protected order management
 paths:
   /healthz:
     get:
@@ -24,6 +28,109 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /orders:
+    post:
+      operationId: createPreorder
+      tags: [orders]
+      summary: Create a customer pre-order
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PreorderInput"
+      responses:
+        "201":
+          description: Pre-order created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PreorderCreated"
+        "400":
+          description: Invalid pre-order details
+  /orders/track:
+    get:
+      operationId: trackPreorders
+      tags: [orders]
+      summary: Look up pre-order statuses
+      description: Provide either an order ID or a validated Algerian phone number. Only order IDs and statuses are returned.
+      parameters:
+        - name: orderId
+          in: query
+          required: false
+          schema:
+            type: string
+            minLength: 12
+            maxLength: 40
+        - name: phone
+          in: query
+          required: false
+          schema:
+            type: string
+            pattern: "^0[567][0-9]{8}$"
+      responses:
+        "200":
+          description: Matching pre-order statuses
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TrackingOrder"
+        "400":
+          description: Provide a valid phone number or order ID
+  /staff/orders:
+    get:
+      operationId: listStaffPreorders
+      tags: [staff]
+      summary: List pre-orders for authorized staff
+      responses:
+        "200":
+          description: Pre-orders for the staff workspace
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/StaffOrder"
+        "401":
+          description: Sign-in required
+        "403":
+          description: Staff access required
+  /staff/orders/{orderId}/status:
+    patch:
+      operationId: updatePreorderStatus
+      tags: [staff]
+      summary: Update a pre-order status
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 12
+            maxLength: 40
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PreorderStatusUpdate"
+      responses:
+        "200":
+          description: Updated pre-order
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StaffOrder"
+        "400":
+          description: Invalid status
+        "401":
+          description: Sign-in required
+        "403":
+          description: Staff access required
+        "404":
+          description: Pre-order not found
 components:
   schemas:
     HealthStatus:
@@ -33,4 +140,80 @@ components:
           type: string
       required:
         - status
+    PreorderStatus:
+      type: string
+      enum: [pending, out_for_delivery, delivered]
+    PreorderVariant:
+      type: string
+      enum: [royal, ivory]
+    PreorderInput:
+      type: object
+      required: [name, phone, variant, wilaya]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 160
+        phone:
+          type: string
+          pattern: "^0[567][0-9]{8}$"
+        variant:
+          $ref: "#/components/schemas/PreorderVariant"
+        wilaya:
+          type: string
+          pattern: "^(0[1-9]|[1-4][0-9]|5[0-8])$"
+    PreorderCreated:
+      type: object
+      required: [orderId, variant, wilaya, status, createdAt]
+      properties:
+        orderId:
+          type: string
+        variant:
+          $ref: "#/components/schemas/PreorderVariant"
+        wilaya:
+          type: string
+        status:
+          $ref: "#/components/schemas/PreorderStatus"
+        createdAt:
+          type: string
+          format: date-time
+    TrackingOrder:
+      type: object
+      required: [orderId, status, updatedAt]
+      properties:
+        orderId:
+          type: string
+        status:
+          $ref: "#/components/schemas/PreorderStatus"
+        updatedAt:
+          type: string
+          format: date-time
+    StaffOrder:
+      type: object
+      required: [orderId, name, phone, variant, wilaya, status, createdAt, updatedAt]
+      properties:
+        orderId:
+          type: string
+        name:
+          type: string
+        phone:
+          type: string
+        variant:
+          $ref: "#/components/schemas/PreorderVariant"
+        wilaya:
+          type: string
+        status:
+          $ref: "#/components/schemas/PreorderStatus"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    PreorderStatusUpdate:
+      type: object
+      required: [status]
+      properties:
+        status:
+          $ref: "#/components/schemas/PreorderStatus"
 

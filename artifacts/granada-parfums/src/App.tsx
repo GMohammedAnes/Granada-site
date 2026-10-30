@@ -1,5 +1,16 @@
 import { useState, type FormEvent } from 'react';
 import { ArrowDown, ArrowRight, Check, Menu, X } from 'lucide-react';
+import { useCreatePreorder } from '@workspace/api-client-react';
+import type { PreorderCreated, PreorderInput } from '@workspace/api-client-react';
+import { Link, Route, Switch, Router as WouterRouter, useLocation } from 'wouter';
+import { ClerkProvider, SignIn, SignUp } from '@clerk/react';
+import { publishableKeyFromHost } from '@clerk/react/internal';
+import { shadcn } from '@clerk/themes';
+import { QueryClientProvider } from '@tanstack/react-query';
+import TrackPage from './pages/TrackPage';
+import StaffPage from './pages/StaffPage';
+import { queryClient } from './lib/queryClient';
+import { apiErrorMessage } from './lib/order-status';
 
 const wilayas = [
   ['01', 'Adrar', 'أدرار'], ['02', 'Chlef', 'الشلف'], ['03', 'Laghouat', 'الأغواط'],
@@ -26,17 +37,17 @@ const wilayas = [
 ];
 
 type Variant = 'royal' | 'ivory';
-type Booking = { name: string; phone: string; variant: Variant; wilaya: string; createdAt: string };
 const phonePattern = /^0[567][0-9]{8}$/;
 
-function App() {
+function Storefront() {
   const [variant, setVariant] = useState<Variant>('royal');
   const [mobileMenu, setMobileMenu] = useState(false);
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [wilaya, setWilaya] = useState('');
-  const [submitted, setSubmitted] = useState(false);
+  const [createdOrder, setCreatedOrder] = useState<PreorderCreated | null>(null);
   const [submitError, setSubmitError] = useState('');
+  const createPreorder = useCreatePreorder();
   const phoneError = phone.length > 0 && !phonePattern.test(phone)
     ? 'أدخل رقم هاتف من 10 أرقام يبدأ بـ 05 أو 06 أو 07.'
     : '';
@@ -48,23 +59,23 @@ function App() {
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setSubmitted(false);
+    setCreatedOrder(null);
     setSubmitError('');
     if (!name.trim() || !phonePattern.test(phone) || !wilaya) {
       setSubmitError('يرجى إكمال جميع المعلومات والتحقق من رقم الهاتف.');
       return;
     }
-    try {
-      const existing: Booking[] = JSON.parse(localStorage.getItem('granada-prebookings') || '[]');
-      const booking: Booking = { name: name.trim(), phone, variant, wilaya, createdAt: new Date().toISOString() };
-      localStorage.setItem('granada-prebookings', JSON.stringify([...existing, booking]));
-      setSubmitted(true);
-      setName('');
-      setPhone('');
-      setWilaya('');
-    } catch {
-      setSubmitError('تعذر الحفظ على هذا الجهاز. يرجى التحقق من مساحة التخزين والمحاولة مجدداً.');
-    }
+    const payload: PreorderInput = { name: name.trim(), phone, variant, wilaya };
+    createPreorder.mutate({ data: payload }, {
+      onSuccess: (order) => {
+        setCreatedOrder(order);
+        setSubmitError('');
+        setName('');
+        setPhone('');
+        setWilaya('');
+      },
+      onError: (error) => setSubmitError(apiErrorMessage(error)),
+    });
   }
 
   const closeMenu = () => setMobileMenu(false);
@@ -79,16 +90,18 @@ function App() {
             <span className="grid h-10 w-10 place-items-center border border-[#c6a56a]/65 text-[#c6a56a] transition-transform group-hover:rotate-45"><span className="star-mark">✧</span></span>
             <span className="leading-tight"><span className="serif block text-[19px] tracking-[.08em]">GRANADA</span><span className="block text-[8px] tracking-[.36em] text-[#c6a56a]">PARFUMS · ALGÉRIE</span></span>
           </a>
-          <nav className="hidden items-center gap-9 text-[11px] tracking-[.16em] text-[#e8ddd3] md:flex" aria-label="Navigation principale">
+           <nav className="hidden items-center gap-7 text-[11px] tracking-[.16em] text-[#e8ddd3] md:flex" aria-label="Navigation principale">
             <a className="transition-colors hover:text-[#d3b677]" href="#collection" data-testid="link-nav-collection">LA COLLECTION</a>
             <a className="transition-colors hover:text-[#d3b677]" href="#story" data-testid="link-nav-story">NOTRE HISTOIRE</a>
             <a className="transition-colors hover:text-[#d3b677]" href="#notes" data-testid="link-nav-notes">LES NOTES</a>
+             <Link className="transition-colors hover:text-[#d3b677]" href="/track" data-testid="link-nav-track">SUIVRE</Link>
           </nav>
           <a href="#booking" className="hidden border border-[#c6a56a] px-5 py-3 text-[10px] tracking-[.16em] text-[#e7d2a4] transition-colors hover:bg-[#c6a56a] hover:text-[#281018] sm:inline-flex" data-testid="link-nav-order">PRÉCOMMANDER <ArrowRight size={13} className="ml-2" /></a>
           <button type="button" aria-label={mobileMenu ? 'Fermer le menu' : 'Ouvrir le menu'} aria-expanded={mobileMenu} onClick={() => setMobileMenu(!mobileMenu)} className="grid h-11 w-11 place-items-center border border-white/20 md:hidden" data-testid="button-mobile-menu">{mobileMenu ? <X size={20} /> : <Menu size={20} />}</button>
         </div>
-        {mobileMenu && <nav className="grid gap-1 border-t border-white/10 bg-[#281018] px-6 py-4 text-sm md:hidden" aria-label="Navigation mobile">
-          {[[ '#collection', 'LA COLLECTION' ], [ '#story', 'NOTRE HISTOIRE' ], [ '#notes', 'LES NOTES' ], [ '#booking', 'PRÉCOMMANDER' ]].map(([href, label]) => <a key={href} href={href} onClick={closeMenu} className="py-3 tracking-[.13em]" data-testid={`link-mobile-${href.slice(1)}`}>{label}</a>)}
+         {mobileMenu && <nav className="grid gap-1 border-t border-white/10 bg-[#281018] px-6 py-4 text-sm md:hidden" aria-label="Navigation mobile">
+           {[[ '#collection', 'LA COLLECTION' ], [ '#story', 'NOTRE HISTOIRE' ], [ '#notes', 'LES NOTES' ], [ '#booking', 'PRÉCOMMANDER' ]].map(([href, label]) => <a key={href} href={href} onClick={closeMenu} className="py-3 tracking-[.13em]" data-testid={`link-mobile-${href.slice(1)}`}>{label}</a>)}
+           <Link href="/track" onClick={closeMenu} className="py-3 tracking-[.13em]" data-testid="link-mobile-track">SUIVRE MA COMMANDE</Link>
         </nav>}
       </header>
 
@@ -192,7 +205,7 @@ function App() {
           <div className="pt-2">
             <p className="section-kicker !text-[#7e5c42]">VOTRE RENDEZ-VOUS AVEC GRANADA</p>
             <h2 className="serif mt-5 text-[42px] leading-[1.08] text-[#301923] sm:text-[56px]">Réservez votre<br /><span className="text-[#765143]">signature.</span></h2>
-            <p className="mt-6 max-w-[390px] text-sm leading-7 text-[#6e6258]">Laissez-nous vos coordonnées pour précommander L’Essence d’Andalousie. Votre demande est enregistrée sur cet appareil.</p>
+             <p className="mt-6 max-w-[390px] text-sm leading-7 text-[#6e6258]">Laissez-nous vos coordonnées pour précommander L’Essence d’Andalousie. Votre demande est transmise à la maison Granada pour suivi.</p>
             <div className="mt-9 border-l border-[#a98c5b] pl-5"><p className="serif text-xl text-[#4b1827]">Un sillage. Une histoire.</p><p dir="rtl" className="mt-2 text-sm text-[#7e6a5d]">عطر الأندلس - عبق يروي حكاية الأصالة</p></div>
           </div>
           <form onSubmit={handleSubmit} className="border border-[#ded3c4] bg-[#faf7f1] p-5 sm:p-9" noValidate data-testid="form-prebooking">
@@ -207,11 +220,12 @@ function App() {
               <label className="grid gap-2 text-[12px] font-medium text-[#493b36]" htmlFor="customer-wilaya"><span>الولاية <span className="text-[#998b7e]">· Wilaya</span></span><select id="customer-wilaya" required value={wilaya} onChange={(e) => setWilaya(e.target.value)} className="h-12 appearance-none border border-[#d7cbbb] bg-[#faf7f1] px-4 text-sm text-[#2c201d] outline-none focus:border-[#8c6b42] focus:ring-2 focus:ring-[#c6a56a]/20" data-testid="select-customer-wilaya"><option value="">Sélectionnez votre wilaya</option>{wilayas.map(([code, french, arabic]) => <option key={code} value={code}>{code} · {french} / {arabic}</option>)}</select></label>
             </div>
             <div aria-live="polite" className="mt-5">
-              {submitError && <p role="alert" className="border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-800" data-testid="status-booking-error">{submitError}</p>}
-              {submitted && <div role="status" className="border border-[#9e895b]/45 bg-[#f1ecde] px-4 py-4 text-sm leading-6 text-[#3e4b32]" data-testid="status-booking-success"><strong className="block">تم حفظ طلبك على هذا الجهاز.</strong><span>Votre précommande a été enregistrée sur cet appareil, sans être envoyée aux serveurs de Granada.</span></div>}
+              {submitError && <p role="alert" className="border border-[#d9b8b2] bg-[#f8eeeb] px-4 py-3 text-sm text-[#813640]" data-testid="status-booking-error">{submitError}</p>}
+              {createPreorder.isPending && <div className="animate-pulse border border-[#ded3c4] bg-[#f1ecde] px-4 py-4 text-sm text-[#604b35]" role="status" data-testid="status-booking-loading">Enregistrement de votre précommande…</div>}
+              {createdOrder && <div role="status" className="border border-[#9e895b]/45 bg-[#f1ecde] px-4 py-4 text-sm leading-6 text-[#3e4b32]" data-testid="status-booking-success"><strong className="block">تم استلام طلبك بنجاح.</strong><span>Votre précommande est confirmée par la maison Granada.</span><span className="mt-3 block text-[10px] tracking-[.14em] text-[#765143]">IDENTIFIANT DE COMMANDE</span><code className="font-mono text-sm text-[#4b1827]" data-testid="text-created-order-id">{createdOrder.orderId}</code><Link href={`/track?orderId=${encodeURIComponent(createdOrder.orderId)}`} className="mt-3 flex items-center gap-2 text-[10px] font-semibold tracking-[.12em] text-[#4b1827] underline underline-offset-4" data-testid="link-track-created-order">SUIVRE CETTE COMMANDE <ArrowRight size={13} /></Link></div>}
             </div>
-            <button type="submit" className="mt-5 flex min-h-[54px] w-full items-center justify-center gap-3 bg-[#4b1827] px-5 text-[11px] font-semibold tracking-[.14em] text-[#f4e9d6] transition-colors hover:bg-[#64253a] focus:outline-none focus:ring-2 focus:ring-[#c6a56a] focus:ring-offset-2" data-testid="button-submit-prebooking">CONFIRMER MA PRÉCOMMANDE <ArrowRight size={15} /></button>
-            <p className="mt-4 text-center text-[10px] leading-5 text-[#92867a]">Aucun paiement en ligne. Vos informations sont enregistrées uniquement sur cet appareil.</p>
+            <button type="submit" disabled={createPreorder.isPending} className="mt-5 flex min-h-[54px] w-full items-center justify-center gap-3 bg-[#4b1827] px-5 text-[11px] font-semibold tracking-[.14em] text-[#f4e9d6] transition-colors hover:bg-[#64253a] focus:outline-none focus:ring-2 focus:ring-[#c6a56a] focus:ring-offset-2 disabled:cursor-wait disabled:opacity-60" data-testid="button-submit-prebooking">{createPreorder.isPending ? 'ENREGISTREMENT…' : 'CONFIRMER MA PRÉCOMMANDE'} <ArrowRight size={15} /></button>
+            <p className="mt-4 text-center text-[10px] leading-5 text-[#92867a]">Aucun paiement en ligne au moment de la précommande. Votre identifiant permet de suivre son statut.</p>
           </form>
         </div>
       </section>
@@ -219,13 +233,116 @@ function App() {
       <footer className="bg-[#211219] px-5 py-10 text-[#e6dbcd]" data-testid="section-footer">
         <div className="mx-auto flex max-w-[1200px] flex-col items-center justify-between gap-7 text-center sm:flex-row sm:text-left">
           <a href="#home" className="flex items-center gap-3" data-testid="link-footer-brand"><span className="grid h-10 w-10 place-items-center border border-[#c6a56a]/60 text-[#c6a56a]">✧</span><span><span className="serif block text-lg tracking-[.08em]">GRANADA</span><span className="block text-[8px] tracking-[.3em] text-[#c6a56a]">PARFUMS · ALGÉRIE</span></span></a>
-          <p dir="rtl" className="text-sm text-[#d5c1a7]" data-testid="text-footer-tagline">عطر الأندلس - عبق يروي حكاية الأصالة</p>
-          <a href="https://www.instagram.com/granada_officiel/" target="_blank" rel="noreferrer" className="border-b border-[#c6a56a]/55 pb-1 text-[11px] tracking-[.12em] text-[#ddc795] transition-colors hover:text-white" data-testid="link-instagram">@granada_officiel <span className="ml-1">↗</span></a>
+           <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-3"><p dir="rtl" className="text-sm text-[#d5c1a7]" data-testid="text-footer-tagline">عطر الأندلس - عبق يروي حكاية الأصالة</p><Link href="/track" className="border-b border-[#c6a56a]/55 pb-1 text-[10px] tracking-[.12em] text-[#ddc795] transition-colors hover:text-white" data-testid="link-footer-track">SUIVRE MA COMMANDE</Link><a href="https://www.instagram.com/granada_officiel/" target="_blank" rel="noreferrer" className="border-b border-[#c6a56a]/55 pb-1 text-[11px] tracking-[.12em] text-[#ddc795] transition-colors hover:text-white" data-testid="link-instagram">@granada_officiel <span className="ml-1">↗</span></a></div>
         </div>
         <div className="mx-auto mt-8 flex max-w-[1200px] flex-col justify-between gap-2 border-t border-white/10 pt-5 text-[10px] tracking-[.08em] text-[#a89a8d] sm:flex-row"><span>© {new Date().getFullYear()} GRANADA PARFUMS · ALGÉRIE</span><a href="#home" className="transition-colors hover:text-[#ddc795]" data-testid="link-back-to-top">L’ART DU PARFUM, DEPUIS L’ALGÉRIE <span className="ml-2">↑</span></a></div>
       </footer>
     </main>
   );
+}
+
+const clerkPubKey = publishableKeyFromHost(
+  window.location.hostname,
+  import.meta.env.VITE_CLERK_PUBLISHABLE_KEY,
+);
+const clerkProxyUrl = import.meta.env.VITE_CLERK_PROXY_URL;
+const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
+
+function stripBase(path: string) {
+  return basePath && path.startsWith(basePath) ? path.slice(basePath.length) || '/' : path;
+}
+
+if (!clerkPubKey) {
+  throw new Error('Missing VITE_CLERK_PUBLISHABLE_KEY in .env file');
+}
+
+const clerkAppearance = {
+  theme: shadcn,
+  cssLayerName: 'clerk',
+  options: {
+    logoPlacement: 'inside' as const,
+    logoLinkUrl: basePath || '/',
+    logoImageUrl: `${window.location.origin}${basePath}/logo.svg`,
+  },
+  variables: {
+    colorPrimary: '#4b1827',
+    colorForeground: '#301923',
+    colorMutedForeground: '#71655d',
+    colorDanger: '#813640',
+    colorBackground: '#faf7f1',
+    colorInput: '#f5f0e7',
+    colorInputForeground: '#301923',
+    colorNeutral: '#c6a56a',
+    fontFamily: "'DM Sans', sans-serif",
+    borderRadius: '0px',
+  },
+  elements: {
+    rootBox: 'w-full flex justify-center',
+    cardBox: 'bg-[#faf7f1] border border-[#c6a56a]/45 rounded-none w-[440px] max-w-full overflow-hidden',
+    card: '!shadow-none !border-0 !bg-transparent !rounded-none',
+    footer: '!shadow-none !border-0 !bg-transparent !rounded-none',
+    headerTitle: 'text-[#301923] font-serif',
+    headerSubtitle: 'text-[#71655d]',
+    socialButtonsBlockButtonText: 'text-[#301923]',
+    formFieldLabel: 'text-[#493b36]',
+    footerActionLink: 'text-[#4b1827]',
+    footerActionText: 'text-[#71655d]',
+    dividerText: 'text-[#71655d]',
+    identityPreviewEditButton: 'text-[#4b1827]',
+    formFieldSuccessText: 'text-[#49613e]',
+    alertText: 'text-[#813640]',
+    logoBox: 'rounded-none',
+    logoImage: 'object-contain',
+    socialButtonsBlockButton: 'border-[#d7cbbb] bg-transparent',
+    formButtonPrimary: 'bg-[#4b1827] hover:bg-[#64253a]',
+    formFieldInput: 'border-[#d7cbbb] bg-[#f5f0e7] text-[#301923]',
+    footerAction: 'text-[#71655d]',
+    dividerLine: 'bg-[#ded3c4]',
+    alert: 'border-[#d9b8b2] bg-[#f8eeeb]',
+    otpCodeFieldInput: 'border-[#d7cbbb] bg-[#f5f0e7] text-[#301923]',
+    formFieldRow: 'text-[#493b36]',
+    main: 'text-[#301923]',
+  },
+};
+
+function SignInPage() {
+  return <div className="flex min-h-[100dvh] items-center justify-center bg-[#321621] px-4 py-12"><div className="tile-pattern fixed inset-0 opacity-20" /><div className="relative w-full"><Link href="/" className="mx-auto mb-8 flex w-fit items-center gap-3 text-[#f5f0e7]" data-testid="link-auth-home"><span className="grid h-10 w-10 place-items-center border border-[#c6a56a]/65 text-[#c6a56a]">✧</span><span className="serif tracking-[.12em]">GRANADA PARFUMS</span></Link><SignIn routing="path" path={`${basePath}/sign-in`} signUpUrl={`${basePath}/sign-up`} /></div></div>;
+}
+
+function SignUpPage() {
+  return <div className="flex min-h-[100dvh] items-center justify-center bg-[#321621] px-4 py-12"><div className="tile-pattern fixed inset-0 opacity-20" /><div className="relative w-full"><Link href="/" className="mx-auto mb-8 flex w-fit items-center gap-3 text-[#f5f0e7]" data-testid="link-auth-home"><span className="grid h-10 w-10 place-items-center border border-[#c6a56a]/65 text-[#c6a56a]">✧</span><span className="serif tracking-[.12em]">GRANADA PARFUMS</span></Link><SignUp routing="path" path={`${basePath}/sign-up`} signInUrl={`${basePath}/sign-in`} /></div></div>;
+}
+
+function RoutedPages() {
+  const [, setLocation] = useLocation();
+  return <ClerkProvider
+    publishableKey={clerkPubKey}
+    proxyUrl={clerkProxyUrl}
+    appearance={clerkAppearance}
+    signInUrl={`${basePath}/sign-in`}
+    signUpUrl={`${basePath}/sign-up`}
+    localization={{
+      signIn: { start: { title: 'Bienvenue chez Granada', subtitle: 'Connectez-vous à votre espace équipe.' } },
+      signUp: { start: { title: 'Rejoindre Granada', subtitle: 'Créez votre accès à l’espace équipe.' } },
+    }}
+    routerPush={(to) => setLocation(stripBase(to))}
+    routerReplace={(to) => setLocation(stripBase(to), { replace: true })}
+  >
+    <QueryClientProvider client={queryClient}>
+      <Switch>
+        <Route path="/" component={Storefront} />
+        <Route path="/track" component={TrackPage} />
+        <Route path="/staff" component={StaffPage} />
+        <Route path="/sign-in/*?" component={SignInPage} />
+        <Route path="/sign-up/*?" component={SignUpPage} />
+        <Route>{() => <main className="grid min-h-[100dvh] place-items-center bg-[#f5f0e7] text-[#301923]"><div className="text-center"><p className="section-kicker !text-[#7e5c42]">GRANADA PARFUMS</p><h1 className="serif mt-4 text-5xl">Cette page n’existe pas.</h1><Link href="/" className="mt-6 inline-flex border border-[#4b1827] px-5 py-3 text-[10px] tracking-[.14em] text-[#4b1827]" data-testid="link-not-found-home">RETOUR À LA MAISON</Link></div></main>}</Route>
+      </Switch>
+    </QueryClientProvider>
+  </ClerkProvider>;
+}
+
+function App() {
+  return <WouterRouter base={basePath}><RoutedPages /></WouterRouter>;
 }
 
 export default App;
