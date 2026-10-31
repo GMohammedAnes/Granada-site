@@ -3,6 +3,7 @@ import { Link } from 'wouter';
 import { ArrowLeft, RefreshCw, ShieldAlert } from 'lucide-react';
 import { getListStaffPreordersQueryKey, useListStaffPreorders, useUpdatePreorderStatus } from '@workspace/api-client-react';
 import type { PreorderStatus, PreorderStatusUpdate } from '@workspace/api-client-react';
+import { formatDzd } from '../components/BundlePricing';
 import { useQueryClient } from '@tanstack/react-query';
 import { apiErrorMessage, apiErrorStatus, statusCopy } from '../lib/order-status';
 
@@ -60,8 +61,23 @@ export default function StaffPage() {
           {orders.map((order) => {
             const selected = drafts[order.orderId] ?? order.status;
             const isSaving = updateStatus.isPending && updateStatus.variables?.orderId === order.orderId;
+            const orderItems: string[] = [];
+            if (order.royaleQuantity > 0) {
+              orderItems.push(`${order.royaleQuantity} × 50 ml Édition Royale`);
+            }
+            if (order.blancheQuantity > 0) {
+              orderItems.push(`${order.blancheQuantity} × 30 ml Édition Blanche`);
+            }
             return <article key={order.orderId} className="grid gap-5 px-5 py-6 lg:grid-cols-[1fr_1fr_auto] lg:items-center lg:px-7" data-testid={`row-staff-order-${order.orderId}`}>
-              <div><p className="font-mono text-xs text-[#4b1827]" data-testid={`text-staff-order-id-${order.orderId}`}>{order.orderId}</p><p className="serif mt-2 text-xl" data-testid={`text-staff-order-name-${order.orderId}`}>{order.name}</p><p className="mt-1 text-xs text-[#71655d]">{order.phone} · Wilaya {order.wilaya}</p><p className="mt-1 text-[10px] text-[#8c8176]">{order.variant === 'royal' ? '50 ml · Édition Royale · 2 000 DZD' : '30 ml · Édition Blanche · 1 200 DZD'}</p></div>
+              <div>
+                <p className="font-mono text-xs text-[#4b1827]" data-testid={`text-staff-order-id-${order.orderId}`}>{order.orderId}</p>
+                <p className="serif mt-2 text-xl" data-testid={`text-staff-order-name-${order.orderId}`}>{order.name}</p>
+                <p className="mt-1 text-xs text-[#71655d]">{order.phone} · Wilaya {order.wilaya}</p>
+                <p className="mt-2 text-[10px] text-[#8c8176]">{orderItems.join(' · ')}</p>
+                <p className="mt-1 text-[10px] text-[#8c8176]">Sous-total · {formatDzd(order.subtotalDzd)} DZD</p>
+                {order.discountDzd > 0 && <p className="mt-1 text-[10px] text-[#765143]">Remise duo · −{formatDzd(order.discountDzd)} DZD</p>}
+                <p className="mt-1 text-xs font-semibold text-[#4b1827]">Total · {formatDzd(order.totalDzd)} DZD</p>
+              </div>
               <div className="text-xs text-[#71655d]"><p>Reçue le {new Date(order.createdAt).toLocaleString('fr-DZ')}</p><p className="mt-2">Statut actuel · <span className="text-[#4b1827]">{statusCopy[order.status].label}</span></p></div>
               <div className="flex flex-wrap items-center gap-2">
                 <select aria-label={`Statut ${order.orderId}`} value={selected} onChange={(event) => setDrafts((current) => ({ ...current, [order.orderId]: event.target.value as PreorderStatus }))} className="h-11 min-w-40 border border-[#d7cbbb] bg-[#faf7f1] px-3 text-xs text-[#301923] outline-none focus:border-[#8c6b42]" data-testid={`select-staff-status-${order.orderId}`}>

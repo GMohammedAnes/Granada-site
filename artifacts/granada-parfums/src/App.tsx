@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { ArrowDown, ArrowRight, Check, Menu, X } from 'lucide-react';
+import { ArrowDown, ArrowRight, Menu, X } from 'lucide-react';
 import {
   getGetCampaignStatusQueryKey,
   useCreatePreorder,
@@ -16,6 +16,11 @@ import StaffPage from './pages/StaffPage';
 import { queryClient } from './lib/queryClient';
 import { apiErrorMessage } from './lib/order-status';
 import { CampaignBanner, CampaignUrgencyPanel } from './components/CampaignScarcity';
+import BundlePricing, {
+  formatDzd,
+  getOrderTotals,
+  type OrderQuantities,
+} from './components/BundlePricing';
 
 const wilayas = [
   ['01', 'Adrar', 'أدرار'], ['02', 'Chlef', 'الشلف'], ['03', 'Laghouat', 'الأغواط'],
@@ -45,7 +50,10 @@ type Variant = 'royal' | 'ivory';
 const phonePattern = /^0[567][0-9]{8}$/;
 
 function Storefront() {
-  const [variant, setVariant] = useState<Variant>('royal');
+  const [quantities, setQuantities] = useState<OrderQuantities>({
+    royaleQuantity: 1,
+    blancheQuantity: 0,
+  });
   const [mobileMenu, setMobileMenu] = useState(false);
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
@@ -62,12 +70,32 @@ function Storefront() {
   });
   const campaign = campaignQuery.data;
   const batchIsFull = campaign?.remaining === 0;
+  const orderTotals = getOrderTotals(quantities);
+  const noItemsSelected = orderTotals.itemCount === 0;
+  const selectedOverCapacity = campaign !== undefined &&
+    orderTotals.itemCount > campaign.remaining;
   const phoneError = phone.length > 0 && !phonePattern.test(phone)
     ? 'أدخل رقم هاتف من 10 أرقام يبدأ بـ 05 أو 06 أو 07.'
     : '';
 
+  function changeQuantity(key: keyof OrderQuantities, value: number) {
+    const available = campaign?.remaining ?? 100;
+    setQuantities((current) => {
+      const otherQuantity = key === 'royaleQuantity'
+        ? current.blancheQuantity
+        : current.royaleQuantity;
+      const max = Math.max(0, Math.min(100, available - otherQuantity));
+      const requested = Number.isFinite(value) ? Math.floor(value) : 0;
+      return {
+        ...current,
+        [key]: Math.min(Math.max(0, requested), max),
+      };
+    });
+  }
+
   function chooseVariant(next: Variant) {
-    setVariant(next);
+    const key = next === 'royal' ? 'royaleQuantity' : 'blancheQuantity';
+    changeQuantity(key, Math.max(quantities[key], 1));
     document.getElementById('booking')?.scrollIntoView({ behavior: 'smooth' });
   }
 
@@ -75,11 +103,17 @@ function Storefront() {
     event.preventDefault();
     setCreatedOrder(null);
     setSubmitError('');
-    if (!name.trim() || !phonePattern.test(phone) || !wilaya) {
+    if (!name.trim() || !phonePattern.test(phone) || !wilaya || noItemsSelected || selectedOverCapacity) {
       setSubmitError('يرجى إكمال جميع المعلومات والتحقق من رقم الهاتف.');
       return;
     }
-    const payload: PreorderInput = { name: name.trim(), phone, variant, wilaya };
+    const payload: PreorderInput = {
+      name: name.trim(),
+      phone,
+      royaleQuantity: quantities.royaleQuantity,
+      blancheQuantity: quantities.blancheQuantity,
+      wilaya,
+    };
     createPreorder.mutate({ data: payload }, {
       onSuccess: (order) => {
         setCreatedOrder(order);
@@ -93,13 +127,19 @@ function Storefront() {
       },
       onError: (error) => {
         if (error.status === 409) {
-          setSubmitError('اكتملت الدفعة الأولى. لا يمكن تسجيل طلب جديد.');
+          setSubmitError('الكمية المطلوبة لم تعد متوفرة. قلّل الكمية ثم حاول مجددًا.');
           void campaignQuery.refetch();
           return;
         }
         setSubmitError(apiErrorMessage(error));
       },
     });
+  }
+
+  function isVariantSelected(key: Variant) {
+    return key === 'royal'
+      ? quantities.royaleQuantity > 0
+      : quantities.blancheQuantity > 0;
   }
 
   const closeMenu = () => setMobileMenu(false);
@@ -165,7 +205,7 @@ function Storefront() {
             {([
               { key: 'royal' as const, size: '50 ml', title: 'Édition Royale', color: 'Noir & or', price: '2,000', detail: 'Une présence intense, pensée pour les grandes occasions.', img: 'noir' },
               { key: 'ivory' as const, size: '30 ml', title: 'Édition Blanche', color: 'Ivoire & or', price: '1,200', detail: 'Le même sillage précieux, dans un format à emporter.', img: 'blanc' },
-            ]).map((item) => <article key={item.key} className={`group relative overflow-hidden border ${variant === item.key ? 'border-[#8b6d42]' : 'border-[#ded3c4]'} bg-[#eee7dc] transition-colors`} data-testid={`card-product-${item.key}`}>
+            ]).map((item) => <article key={item.key} className={`group relative overflow-hidden border ${isVariantSelected(item.key) ? 'border-[#8b6d42]' : 'border-[#ded3c4]'} bg-[#eee7dc] transition-colors`} data-testid={`card-product-${item.key}`}>
               <div className="relative flex min-h-[265px] items-center justify-center overflow-hidden bg-[radial-gradient(ellipse_at_50%_55%,#d8cabb_0%,#e9e1d6_43%,#eee7dc_72%)]">
                 <span className="arch-frame absolute bottom-[-68px] left-1/2 h-[350px] w-[238px] -translate-x-1/2 border border-[#b69661]/55" />
                 <span className="absolute bottom-8 left-1/2 h-px w-[60%] -translate-x-1/2 bg-[#b69661]/50" />
@@ -248,18 +288,21 @@ function Storefront() {
             <div className="grid gap-5">
               <label className="grid gap-2 text-[12px] font-medium text-[#493b36]" htmlFor="customer-name"><span>الإسم واللقب <span className="text-[#998b7e]">· Nom complet</span></span><input id="customer-name" value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" required className="h-12 border border-[#d7cbbb] bg-transparent px-4 text-sm text-[#2c201d] outline-none transition-colors placeholder:text-[#a3978a] focus:border-[#8c6b42] focus:ring-2 focus:ring-[#c6a56a]/20" placeholder="Votre nom complet" data-testid="input-customer-name" /></label>
               <label className="grid gap-2 text-[12px] font-medium text-[#493b36]" htmlFor="customer-phone"><span>رقم الهاتف <span className="text-[#998b7e]">· Téléphone</span></span><input id="customer-phone" type="tel" inputMode="numeric" autoComplete="tel" value={phone} onChange={(e) => setPhone(e.target.value.replace(/\s/g, ''))} aria-invalid={!!phoneError} aria-describedby="phone-hint phone-error" required maxLength={10} className={`h-12 border bg-transparent px-4 text-sm text-[#2c201d] outline-none transition-colors placeholder:text-[#a3978a] focus:ring-2 focus:ring-[#c6a56a]/20 ${phoneError ? 'border-red-700 focus:border-red-700' : 'border-[#d7cbbb] focus:border-[#8c6b42]'}`} placeholder="05 00 00 00 00" data-testid="input-customer-phone" /><span id="phone-hint" className="text-[10px] text-[#897c70]">10 chiffres · commence par 05, 06 ou 07</span>{phoneError && <span id="phone-error" role="alert" className="text-xs text-red-800" data-testid="error-phone">{phoneError}</span>}</label>
-              <fieldset className="grid gap-2"><legend className="mb-2 text-[12px] font-medium text-[#493b36]">اختار عطرك <span className="text-[#998b7e]">· Choisissez votre édition</span></legend><div className="grid grid-cols-2 gap-3">
-                <label className={`relative flex min-h-[68px] cursor-pointer items-center gap-3 border px-3 transition-colors ${variant === 'royal' ? 'border-[#765143] bg-[#f0e9dd]' : 'border-[#d7cbbb]'} `} data-testid="option-variant-royal"><input type="radio" name="variant" value="royal" checked={variant === 'royal'} onChange={() => setVariant('royal')} className="accent-[#4b1827]" data-testid="input-variant-royal" /><span><span className="block text-[11px] font-semibold text-[#35211f]">50 ml · Édition Royale</span><span className="mt-1 block text-[11px] text-[#84633d]">2,000 DZD</span></span>{variant === 'royal' && <Check size={14} className="ml-auto text-[#765143]" />}</label>
-                <label className={`relative flex min-h-[68px] cursor-pointer items-center gap-3 border px-3 transition-colors ${variant === 'ivory' ? 'border-[#765143] bg-[#f0e9dd]' : 'border-[#d7cbbb]'}`} data-testid="option-variant-ivory"><input type="radio" name="variant" value="ivory" checked={variant === 'ivory'} onChange={() => setVariant('ivory')} className="accent-[#4b1827]" data-testid="input-variant-ivory" /><span><span className="block text-[11px] font-semibold text-[#35211f]">30 ml · Édition Blanche</span><span className="mt-1 block text-[11px] text-[#84633d]">1,200 DZD</span></span>{variant === 'ivory' && <Check size={14} className="ml-auto text-[#765143]" />}</label>
-              </div></fieldset>
+              <BundlePricing
+                quantities={quantities}
+                maxTotal={campaign?.remaining ?? 100}
+                onQuantityChange={changeQuantity}
+              />
+              {noItemsSelected && <p className="text-xs text-[#813640]">اختر قارورة واحدة على الأقل · Sélectionnez au moins une bouteille.</p>}
+              {selectedOverCapacity && <p role="alert" className="text-xs text-[#813640]">المتبقي {campaign?.remaining} فقط. قلّل الكمية للمتابعة · Réduisez la quantité pour continuer.</p>}
               <label className="grid gap-2 text-[12px] font-medium text-[#493b36]" htmlFor="customer-wilaya"><span>الولاية <span className="text-[#998b7e]">· Wilaya</span></span><select id="customer-wilaya" required value={wilaya} onChange={(e) => setWilaya(e.target.value)} className="h-12 appearance-none border border-[#d7cbbb] bg-[#faf7f1] px-4 text-sm text-[#2c201d] outline-none focus:border-[#8c6b42] focus:ring-2 focus:ring-[#c6a56a]/20" data-testid="select-customer-wilaya"><option value="">Sélectionnez votre wilaya</option>{wilayas.map(([code, french, arabic]) => <option key={code} value={code}>{code} · {french} / {arabic}</option>)}</select></label>
             </div>
             <div aria-live="polite" className="mt-5">
               {submitError && <p role="alert" className="border border-[#d9b8b2] bg-[#f8eeeb] px-4 py-3 text-sm text-[#813640]" data-testid="status-booking-error">{submitError}</p>}
               {createPreorder.isPending && <div className="animate-pulse border border-[#ded3c4] bg-[#f1ecde] px-4 py-4 text-sm text-[#604b35]" role="status" data-testid="status-booking-loading">Enregistrement de votre précommande…</div>}
-              {createdOrder && <div role="status" className="border border-[#9e895b]/45 bg-[#f1ecde] px-4 py-4 text-sm leading-6 text-[#3e4b32]" data-testid="status-booking-success"><strong className="block">تم استلام طلبك بنجاح.</strong><span>Votre précommande est confirmée par la maison Granada.</span><span className="mt-3 block text-[10px] tracking-[.14em] text-[#765143]">IDENTIFIANT DE COMMANDE</span><code className="font-mono text-sm text-[#4b1827]" data-testid="text-created-order-id">{createdOrder.orderId}</code><Link href={`/track?orderId=${encodeURIComponent(createdOrder.orderId)}`} className="mt-3 flex items-center gap-2 text-[10px] font-semibold tracking-[.12em] text-[#4b1827] underline underline-offset-4" data-testid="link-track-created-order">SUIVRE CETTE COMMANDE <ArrowRight size={13} /></Link></div>}
+              {createdOrder && <div role="status" className="border border-[#9e895b]/45 bg-[#f1ecde] px-4 py-4 text-sm leading-6 text-[#3e4b32]" data-testid="status-booking-success"><strong className="block">تم استلام طلبك بنجاح.</strong><span>Votre précommande est confirmée par la maison Granada.</span><span className="mt-2 block text-xs">{createdOrder.royaleQuantity > 0 && `${createdOrder.royaleQuantity} × 50 ml Édition Royale`}{createdOrder.royaleQuantity > 0 && createdOrder.blancheQuantity > 0 && ' · '}{createdOrder.blancheQuantity > 0 && `${createdOrder.blancheQuantity} × 30 ml Édition Blanche`}</span>{createdOrder.discountDzd > 0 && <span className="block text-xs text-[#765143]">Remise duo · −{formatDzd(createdOrder.discountDzd)} DZD</span>}<strong className="block text-sm">Total · {formatDzd(createdOrder.totalDzd)} DZD</strong><span className="mt-3 block text-[10px] tracking-[.14em] text-[#765143]">IDENTIFIANT DE COMMANDE</span><code className="font-mono text-sm text-[#4b1827]" data-testid="text-created-order-id">{createdOrder.orderId}</code><Link href={`/track?orderId=${encodeURIComponent(createdOrder.orderId)}`} className="mt-3 flex items-center gap-2 text-[10px] font-semibold tracking-[.12em] text-[#4b1827] underline underline-offset-4" data-testid="link-track-created-order">SUIVRE CETTE COMMANDE <ArrowRight size={13} /></Link></div>}
             </div>
-             <button type="submit" disabled={createPreorder.isPending || batchIsFull} className="mt-5 flex min-h-[54px] w-full items-center justify-center gap-3 bg-[#4b1827] px-5 text-[11px] font-semibold tracking-[.14em] text-[#f4e9d6] transition-colors hover:bg-[#64253a] focus:outline-none focus:ring-2 focus:ring-[#c6a56a] focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60" data-testid="button-submit-prebooking">{createPreorder.isPending ? 'ENREGISTREMENT…' : batchIsFull ? 'اكتملت الدفعة الأولى' : 'CONFIRMER MA PRÉCOMMANDE'} {!batchIsFull && <ArrowRight size={15} />}</button>
+             <button type="submit" disabled={createPreorder.isPending || batchIsFull || noItemsSelected || selectedOverCapacity} className="mt-5 flex min-h-[54px] w-full items-center justify-center gap-3 bg-[#4b1827] px-5 text-[11px] font-semibold tracking-[.14em] text-[#f4e9d6] transition-colors hover:bg-[#64253a] focus:outline-none focus:ring-2 focus:ring-[#c6a56a] focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60" data-testid="button-submit-prebooking">{createPreorder.isPending ? 'ENREGISTREMENT…' : batchIsFull ? 'اكتملت الدفعة الأولى' : noItemsSelected ? 'CHOISISSEZ UN FORMAT' : selectedOverCapacity ? 'RÉDUISEZ LA QUANTITÉ' : 'CONFIRMER MA PRÉCOMMANDE'} {!batchIsFull && !noItemsSelected && !selectedOverCapacity && <ArrowRight size={15} />}</button>
             <p className="mt-4 text-center text-[10px] leading-5 text-[#92867a]">Aucun paiement en ligne au moment de la précommande. Votre identifiant permet de suivre son statut.</p>
           </form>
         </div>
