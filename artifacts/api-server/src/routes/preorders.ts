@@ -13,6 +13,7 @@ import {
   UpdatePreorderStatusParams,
   UpdatePreorderStatusResponse,
 } from "@workspace/api-zod";
+import { sendGranadaOrderNotification } from "../lib/granada-order-notifications";
 import {
   db,
   granadaCampaignTable,
@@ -197,6 +198,36 @@ router.post("/orders", preorderLimiter, async (req, res): Promise<void> => {
   if (!preorder) {
     res.status(409).json({ error: "The first launch batch is fully reserved." });
     return;
+  }
+
+  try {
+    const notification = await sendGranadaOrderNotification({
+      orderId: preorder.orderId,
+      name: preorder.name,
+      phone: preorder.phone,
+      wilaya: preorder.wilaya,
+      royaleQuantity: preorder.royaleQuantity,
+      blancheQuantity: preorder.blancheQuantity,
+      subtotalDzd: preorder.subtotalDzd,
+      discountDzd: preorder.discountDzd,
+      totalDzd: preorder.totalDzd,
+    });
+    if (notification.sent) {
+      req.log.info({ orderId: preorder.orderId }, "Granada admin order email sent");
+    } else {
+      req.log.warn(
+        { orderId: preorder.orderId, missing: notification.missing },
+        "Granada admin order email is not configured",
+      );
+    }
+  } catch (error) {
+    req.log.error(
+      {
+        orderId: preorder.orderId,
+        error: error instanceof Error ? error.message : "Unknown notification error",
+      },
+      "Failed to send Granada admin order email",
+    );
   }
 
   res.status(201).json(
